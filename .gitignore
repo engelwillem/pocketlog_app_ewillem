@@ -1,0 +1,14 @@
+.dart_tool/
+.buildlog/
+.packages
+.pub/
+.pub-cache/
+build/
+android/.gradle/
+android/app/build/
+ios/Pods/
+ios/.symlinks/
+**/*.iml
+.idea/
+.vscode/
+.DS_Store
