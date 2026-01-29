@@ -42,9 +42,9 @@ class _AddEditItemPageState extends State<AddEditItemPage> {
     super.dispose();
   }
 
-  Future<void> _pickImage() async {
-    final pickedFile =
-        await ImagePicker().pickImage(source: ImageSource.gallery);
+  Future<void> _pickImage(ImageSource source) async {
+    final pickedFile = await ImagePicker()
+        .pickImage(source: source, imageQuality: 70, maxWidth: 1280, maxHeight: 1280);
 
     if (pickedFile != null) {
       final croppedFile = await ImageCropper().cropImage(
@@ -64,15 +64,14 @@ class _AddEditItemPageState extends State<AddEditItemPage> {
                 CropAspectRatioPreset.ratio16x9
               ]),
           IOSUiSettings(
-            title: 'Cropper',
-            aspectRatioPresets: [
+              title: 'Cropper',
+              aspectRatioPresets: [
                 CropAspectRatioPreset.square,
                 CropAspectRatioPreset.ratio3x2,
                 CropAspectRatioPreset.original,
                 CropAspectRatioPreset.ratio4x3,
                 CropAspectRatioPreset.ratio16x9
-            ]
-          ),
+              ]),
         ],
       );
 
@@ -88,10 +87,39 @@ class _AddEditItemPageState extends State<AddEditItemPage> {
     }
   }
 
+  void _showImageSourceActionSheet(BuildContext context) {
+    showModalBottomSheet(
+        context: context,
+        builder: (BuildContext bc) {
+          return SafeArea(
+            child: Wrap(
+              children: <Widget>[
+                ListTile(
+                    leading: const Icon(Icons.photo_library),
+                    title: const Text('Gallery'),
+                    onTap: () {
+                      _pickImage(ImageSource.gallery);
+                      Navigator.of(context).pop();
+                    }),
+                ListTile(
+                  leading: const Icon(Icons.photo_camera),
+                  title: const Text('Camera'),
+                  onTap: () {
+                    _pickImage(ImageSource.camera);
+                    Navigator.of(context).pop();
+                  },
+                ),
+              ],
+            ),
+          );
+        });
+  }
+
   void _saveItem() {
     if (_formKey.currentState!.validate()) {
       final catalogBox = Hive.box<CatalogItem>('catalog');
-      final id = widget.item?.id ?? 'item_${DateTime.now().millisecondsSinceEpoch}';
+      final id =
+          widget.item?.id ?? 'item_${DateTime.now().millisecondsSinceEpoch}';
 
       final newItem = CatalogItem(
         id: id,
@@ -120,7 +148,7 @@ class _AddEditItemPageState extends State<AddEditItemPage> {
           child: Column(
             children: [
               GestureDetector(
-                onTap: _pickImage,
+                onTap: () => _showImageSourceActionSheet(context),
                 child: Container(
                   width: 100,
                   height: 100,
