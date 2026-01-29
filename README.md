@@ -98,7 +98,6 @@ Jika dikembangkan lebih lanjut, PocketLog bisa ditingkatkan dengan:
 - CRUD item katalog (Tambah/Edit/Hapus)
 - Foto item offline + cropping yang stabil
 - Favorit & kategori dinamis
-- Sinkronisasi cloud opsional (Firebase / Supabase)
 
 ## 👤 Author (E B Willem)
 Jika Anda recruiter / business owner dan ingin berdiskusi tentang pengembangan aplikasi mobile untuk kebutuhan bisnis, maupun pelayanan Gereja atau Komunitas silakan hubungi saya di WA https://wa.me/+6287719814529.

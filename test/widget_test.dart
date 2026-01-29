@@ -38,30 +38,27 @@ void main() {
     }
   });
 
-  testWidgets('PocketLog: Home tampil dan bisa ke Search + filter', (tester) async {
-    // Jalankan app
+  testWidgets('PocketLog: Catalog page displays and filters correctly', (tester) async {
+    // Run the app
     await tester.pumpWidget(const MyApp());
+    await tester.pumpAndSettle();
 
-    // Pastikan Home tampil
+    // Verify that the CatalogPage is displayed
     expect(find.text('PocketLog'), findsOneWidget);
     expect(find.text('Item 1'), findsOneWidget);
+    expect(find.text('Item 12'), findsOneWidget);
 
-    // Navigasi ke Search
-    await tester.tap(find.byIcon(Icons.search));
+    // Verify that the filter chips are present
+    expect(find.byType(FilterChip), findsWidgets);
+
+    // Tap on the specific filter chip
+    await tester.tap(find.widgetWithText(FilterChip, 'Kategori 1'));
     await tester.pumpAndSettle();
 
-    // Pastikan SearchPage tampil
-    expect(find.text('Search'), findsOneWidget);
-    expect(find.byType(TextField), findsOneWidget);
-
-    // Ketik untuk memfilter
-    await tester.enterText(find.byType(TextField), 'Item 12');
-    await tester.pumpAndSettle();
-
-    // Cek "Item 12" di list saja (bukan teks di TextField)
-    final listTextMatches =
-        find.text('Item 12').evaluate().where((e) => e.widget is Text).length;
-
-    expect(listTextMatches, 1);
+    // Verify that the list is filtered
+    expect(find.text('Item 1'), findsOneWidget);
+    expect(find.text('Item 2'), findsNothing);
+    expect(find.text('Item 5'), findsOneWidget);
+    expect(find.text('Item 9'), findsOneWidget);
   });
 }

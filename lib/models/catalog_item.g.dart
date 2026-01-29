@@ -8,7 +8,7 @@ part of 'catalog_item.dart';
 
 class CatalogItemAdapter extends TypeAdapter<CatalogItem> {
   @override
-  final int typeId = 0;
+  final int typeId = 1;
 
   @override
   CatalogItem read(BinaryReader reader) {
@@ -22,14 +22,15 @@ class CatalogItemAdapter extends TypeAdapter<CatalogItem> {
       category: fields[2] as String,
       description: fields[3] as String,
       imagePath: fields[4] as String?,
-      isFavorite: fields[5] as bool,
+      videoPath: fields[5] as String?,
+      barcode: fields[6] as String?,
     );
   }
 
   @override
   void write(BinaryWriter writer, CatalogItem obj) {
     writer
-      ..writeByte(6)
+      ..writeByte(7)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -41,7 +42,9 @@ class CatalogItemAdapter extends TypeAdapter<CatalogItem> {
       ..writeByte(4)
       ..write(obj.imagePath)
       ..writeByte(5)
-      ..write(obj.isFavorite);
+      ..write(obj.videoPath)
+      ..writeByte(6)
+      ..write(obj.barcode);
   }
 
   @override

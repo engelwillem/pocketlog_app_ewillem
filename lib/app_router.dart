@@ -1,39 +1,55 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import 'package:pocketlog_app_ewillem/pages/add_edit_item_page.dart';
+import 'package:pocketlog_app_ewillem/pages/catalog_page.dart';
+import 'package:pocketlog_app_ewillem/pages/product_detail_page.dart';
+import 'package:pocketlog_app_ewillem/models/catalog_item.dart';
 
-import 'pages/catalog_page.dart';
-import 'pages/product_detail_page.dart';
-
-class Routes {
-  static const catalog = '/';
-  static const detail = '/detail';
-}
-
-class AppRouter {
-  static Route<dynamic> onGenerateRoute(RouteSettings settings) {
-    switch (settings.name) {
-      case Routes.catalog:
-        return MaterialPageRoute(builder: (_) => const CatalogPage());
-
-      case Routes.detail:
-        final args = settings.arguments;
-        if (args is Map<String, dynamic>) {
-          return MaterialPageRoute(
-            builder: (_) => ProductDetailPage(product: args),
-          );
-        }
-        return _errorRoute('Argumen detail tidak valid');
-
-      default:
-        return _errorRoute('Route tidak ditemukan: ${settings.name}');
-    }
-  }
-
-  static Route<dynamic> _errorRoute(String message) {
-    return MaterialPageRoute(
-      builder: (_) => Scaffold(
-        appBar: AppBar(title: const Text('Error')),
-        body: Center(child: Text(message)),
-      ),
-    );
-  }
-}
+final appRouter = GoRouter(
+  initialLocation: '/',
+  routes: [
+    GoRoute(
+      path: '/',
+      builder: (context, state) => const CatalogPage(),
+      routes: [
+        GoRoute(
+            path: 'item/new',
+            builder: (context, state) {
+              // Pass the extra data (if any) to the AddEditItemPage
+              return AddEditItemPage(routeExtra: state.extra);
+            }),
+        GoRoute(
+            path: 'item/:id',
+            builder: (context, state) {
+              final item = state.extra as CatalogItem?;
+              if (item != null) {
+                return ProductDetailPage(item: item);
+              }
+              return const Scaffold(
+                body: Center(
+                  child: Text('Item not found'),
+                ),
+              );
+            },
+            routes: [
+              GoRoute(
+                path: 'edit',
+                builder: (context, state) {
+                  // The 'extra' for this route is passed down from the parent
+                  final item = state.extra as CatalogItem?;
+                  if (item != null) {
+                    // Pass the item to be edited to the AddEditItemPage
+                    return AddEditItemPage(routeExtra: item);
+                  }
+                  return const Scaffold(
+                    body: Center(
+                      child: Text('Item not found for editing'),
+                    ),
+                  );
+                },
+              ),
+            ]),
+      ],
+    ),
+  ],
+);

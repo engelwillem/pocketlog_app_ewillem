@@ -1,95 +1,216 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
+import 'package:go_router/go_router.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+import 'package:pocketlog_app_ewillem/models/catalog_item.dart';
+import 'dart:io';
+import 'package:pocketlog_app_ewillem/pages/barcode_scanner_page.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
-import '../app_router.dart';
 
-class CatalogPage extends StatelessWidget {
+class CatalogPage extends StatefulWidget {
   const CatalogPage({super.key});
 
-  // Dummy data offline dulu (nanti dirapihin nama+foto kedepannya)
-  static final List<Map<String, dynamic>> _products = [
-    {'name': 'IT Runner Pro', 'price': 349000},
-    {'name': 'IT Street Flex', 'price': 299000},
-    {'name': 'IT Hiking Grip', 'price': 429000},
-    {'name': 'IT Slip-On Daily', 'price': 219000},
-    {'name': 'IT Court Classic', 'price': 319000},
-    {'name': 'IT Sandal Urban', 'price': 179000},
-  ];
+  @override
+  State<CatalogPage> createState() => _CatalogPageState();
+}
+
+class _CatalogPageState extends State<CatalogPage> {
+  String? _selectedCategory;
+
+  Future<void> _scanBarcode() async {
+    // Navigate to the scanner page and wait for a result
+    final barcode = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const BarcodeScannerPage(),
+      ),
+    );
+
+    if (barcode != null && context.mounted) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(content: Text('Scanned barcode: $barcode. Fetching data...')),
+        );
+      
+      try {
+        final productInfo = await _fetchProductInfo(barcode);
+        if (context.mounted) {
+          if (productInfo != null) {
+            context.go('/item/new', extra: productInfo);
+          } else {
+            ScaffoldMessenger.of(context)
+            ..hideCurrentSnackBar()
+            ..showSnackBar(
+              SnackBar(content: Text('Product not found for barcode: $barcode')),
+            );
+            context.go('/item/new', extra: {'barcode': barcode});
+          }
+        }
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(content: Text('Error fetching product data: $e')),
+          );
+          context.go('/item/new', extra: {'barcode': barcode});
+        }
+      }
+    }
+  }
+
+  Future<Map<String, String>?> _fetchProductInfo(String barcode) async {
+    // Using Open Food Facts API
+    final url = Uri.parse('https://world.openfoodfacts.org/api/v0/product/$barcode.json');
+    final response = await http.get(url);
+
+    if (response.statusCode == 200) {
+      final data = json.decode(response.body);
+      if (data['status'] == 1) {
+        final product = data['product'];
+        return {
+          'title': product['product_name'] ?? '',
+          'category': product['categories']?.split(',').first.trim() ?? 'Uncategorized',
+          'barcode': barcode,
+        };
+      }
+    }
+    return null;
+  }
 
   @override
   Widget build(BuildContext context) {
+    final catalogBox = Hive.box<CatalogItem>('catalog');
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Katalog')),
+      appBar: AppBar(
+        title: const Text('PocketLog'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.qr_code_scanner),
+            onPressed: _scanBarcode,
+          ),
+        ],
+      ),
       body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            // Responsif: lebar layar menentukan jumlah kolom grid
-            final maxTileWidth = constraints.maxWidth < 500 ? 220.0 : 260.0;
-
-            return GridView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: _products.length,
-              gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
-                maxCrossAxisExtent: maxTileWidth,
-                mainAxisSpacing: 12,
-                crossAxisSpacing: 12,
-                childAspectRatio: 1.1,
-              ),
-              itemBuilder: (context, index) {
-                final p = _products[index];
-
-                return InkWell(
-                  borderRadius: BorderRadius.circular(16),
-                  onTap: () {
-                    Navigator.pushNamed(
-                      context,
-                      Routes.detail,
-                      arguments: p, // kirim data ke halaman detail
-                    );
-                  },
-                  child: Card(
-                    elevation: 1,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(14),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Placeholder gambar dulu (nanti diganti jadi Image.asset)
-                          Expanded(
-                            child: Container(
-                              width: double.infinity,
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(12),
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.surfaceContainerHighest,
-                              ),
-                              child: const Icon(Icons.image, size: 48),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          Text(
-                            p['name'] as String,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.titleMedium,
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            'Rp ${p['price']}',
-                            style: Theme.of(context).textTheme.bodyMedium,
-                          ),
-                        ],
-                      ),
-                    ),
+        child: Column(
+          children: [
+            ValueListenableBuilder(
+              valueListenable: catalogBox.listenable(),
+              builder: (context, Box<CatalogItem> box, _) {
+                final categories = [
+                  'All',
+                  ...box.values.map((e) => e.category).toSet()
+                ];
+                return SizedBox(
+                  height: 60,
+                  child: ListView.separated(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    scrollDirection: Axis.horizontal,
+                    itemCount: categories.length,
+                    separatorBuilder: (context, index) =>
+                        const SizedBox(width: 8),
+                    itemBuilder: (context, index) {
+                      final category = categories[index];
+                      return FilterChip(
+                        label: Text(category),
+                        selected: _selectedCategory == category ||
+                            (_selectedCategory == null && category == 'All'),
+                        onSelected: (selected) {
+                          setState(() {
+                            if (selected) {
+                              _selectedCategory =
+                                  category == 'All' ? null : category;
+                            } else {
+                              _selectedCategory = null;
+                            }
+                          });
+                        },
+                      );
+                    },
                   ),
                 );
               },
-            );
-          },
+            ),
+            Expanded(
+              child: ValueListenableBuilder(
+                valueListenable: catalogBox.listenable(),
+                builder: (context, Box<CatalogItem> box, _) {
+                  final items = box.values.where((item) {
+                    return _selectedCategory == null ||
+                        item.category == _selectedCategory;
+                  }).toList();
+
+                  if (items.isEmpty) {
+                    return const Center(
+                      child: Text('No items in this category.'),
+                    );
+                  }
+                  return MasonryGridView.count(
+                    padding: const EdgeInsets.all(16),
+                    crossAxisCount: 2,
+                    mainAxisSpacing: 16,
+                    crossAxisSpacing: 16,
+                    itemCount: items.length,
+                    itemBuilder: (context, index) {
+                      final item = items[index];
+                      return InkWell(
+                        onTap: () => context.go('/item/${item.id}', extra: item),
+                        child: Card(
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (item.imagePath != null)
+                                ClipRRect(
+                                  borderRadius: const BorderRadius.only(
+                                    topLeft: Radius.circular(10),
+                                    topRight: Radius.circular(10),
+                                  ),
+                                  child: Image.file(
+                                    File(item.imagePath!),
+                                    fit: BoxFit.cover,
+                                  ),
+                                ),
+                              Padding(
+                                padding: const EdgeInsets.all(8.0),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      item.title,
+                                      style:
+                                          Theme.of(context).textTheme.titleMedium,
+                                    ),
+                                    Text(
+                                      item.category,
+                                      style:
+                                          Theme.of(context).textTheme.bodySmall,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
         ),
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => context.go('/item/new'),
+        child: const Icon(Icons.add),
       ),
     );
   }
