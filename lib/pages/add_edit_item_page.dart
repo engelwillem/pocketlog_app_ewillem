@@ -1,5 +1,10 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:hive/hive.dart';
+import 'package:image_cropper/image_cropper.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:pocketlog_app_ewillem/models/catalog_item.dart';
 
 class AddEditItemPage extends StatefulWidget {
@@ -16,14 +21,17 @@ class _AddEditItemPageState extends State<AddEditItemPage> {
   late TextEditingController _titleController;
   late TextEditingController _categoryController;
   late TextEditingController _descriptionController;
+  String? _imagePath;
 
   @override
   void initState() {
     super.initState();
     _titleController = TextEditingController(text: widget.item?.title ?? '');
-    _categoryController = TextEditingController(text: widget.item?.category ?? '');
+    _categoryController =
+        TextEditingController(text: widget.item?.category ?? '');
     _descriptionController =
         TextEditingController(text: widget.item?.description ?? '');
+    _imagePath = widget.item?.imagePath;
   }
 
   @override
@@ -32,6 +40,45 @@ class _AddEditItemPageState extends State<AddEditItemPage> {
     _categoryController.dispose();
     _descriptionController.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickImage() async {
+    final pickedFile =
+        await ImagePicker().pickImage(source: ImageSource.gallery);
+
+    if (pickedFile != null) {
+      final croppedFile = await ImageCropper().cropImage(
+        sourcePath: pickedFile.path,
+        aspectRatioPresets: [
+          CropAspectRatioPreset.square,
+          CropAspectRatioPreset.ratio3x2,
+          CropAspectRatioPreset.original,
+          CropAspectRatioPreset.ratio4x3,
+          CropAspectRatioPreset.ratio16x9
+        ],
+        uiSettings: [
+          AndroidUiSettings(
+              toolbarTitle: 'Cropper',
+              toolbarColor: Colors.deepOrange,
+              toolbarWidgetColor: Colors.white,
+              initAspectRatio: CropAspectRatioPreset.original,
+              lockAspectRatio: false),
+          IOSUiSettings(
+            title: 'Cropper',
+          ),
+        ],
+      );
+
+      if (croppedFile != null) {
+        final directory = await getApplicationDocumentsDirectory();
+        final fileName = '${DateTime.now().millisecondsSinceEpoch}.png';
+        final savedImage =
+            await File(croppedFile.path).copy('${directory.path}/$fileName');
+        setState(() {
+          _imagePath = savedImage.path;
+        });
+      }
+    }
   }
 
   void _saveItem() {
@@ -44,7 +91,7 @@ class _AddEditItemPageState extends State<AddEditItemPage> {
         title: _titleController.text,
         category: _categoryController.text,
         description: _descriptionController.text,
-        imagePath: widget.item?.imagePath,
+        imagePath: _imagePath,
         isFavorite: widget.item?.isFavorite ?? false,
       );
 
@@ -65,6 +112,22 @@ class _AddEditItemPageState extends State<AddEditItemPage> {
           key: _formKey,
           child: Column(
             children: [
+              GestureDetector(
+                onTap: _pickImage,
+                child: Container(
+                  width: 100,
+                  height: 100,
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: _imagePath != null
+                      ? Image.file(File(_imagePath!), fit: BoxFit.cover)
+                      : const Icon(Icons.add_a_photo,
+                          color: Colors.grey, size: 50),
+                ),
+              ),
+              const SizedBox(height: 20),
               TextFormField(
                 controller: _titleController,
                 decoration: const InputDecoration(labelText: 'Title'),
