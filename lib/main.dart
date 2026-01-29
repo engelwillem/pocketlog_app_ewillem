@@ -1,39 +1,36 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+import 'package:pocketlog_app_ewillem/models/catalog_item.dart';
+import 'package:pocketlog_app_ewillem/pages/add_edit_item_page.dart';
 
-void main() => runApp(const MyApp());
+void main() async {
+  await Hive.initFlutter();
+  Hive.registerAdapter(CatalogItemAdapter());
+  final box = await Hive.openBox<CatalogItem>('catalog');
 
-// =====================
-// Model + data lokal (offline)
-// =====================
-class CatalogItem {
-  final String id;
-  final String title;
-  final String subtitle; // kategori singkat
-  final String description;
+  // Isi data awal jika database kosong
+  if (box.isEmpty) {
+    final demoItems = List.generate(
+      12,
+      (i) => CatalogItem(
+        id: 'item_${i + 1}',
+        title: 'Item ${i + 1}',
+        subtitle: 'Kategori ${(i % 4) + 1}',
+        description:
+            'Ini deskripsi item ${i + 1}. Data masih lokal agar UI + navigasi stabil dan bisa digunakan offline.',
+      ),
+    );
+    for (var item in demoItems) {
+      box.put(item.id, item);
+    }
+  }
 
-  const CatalogItem({
-    required this.id,
-    required this.title,
-    required this.subtitle,
-    required this.description,
-  });
+  runApp(const MyApp());
 }
 
-final List<CatalogItem> demoItems = List.generate(
-  12,
-  (i) => CatalogItem(
-    id: 'item_${i + 1}',
-    title: 'Item ${i + 1}',
-    subtitle: 'Kategori ${(i % 4) + 1}',
-    description:
-        'Ini deskripsi item ${i + 1}. Data masih lokal agar UI + navigasi stabil dan bisa digunakan offline.',
-  ),
-);
-
 // Menyimpan path gambar per item (untuk masa depan).
-// Saat submission: tombol foto dinonaktifkan agar tidak crash.
 final ValueNotifier<Map<String, String>> itemImagePaths = ValueNotifier(
   <String, String>{},
 );
@@ -87,6 +84,8 @@ class HomePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final catalogBox = Hive.box<CatalogItem>('catalog');
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('PocketLog'),
@@ -107,29 +106,39 @@ class HomePage extends StatelessWidget {
         child: Column(
           children: [
             Expanded(
-              child: ListView.separated(
-                padding: const EdgeInsets.all(16),
-                itemCount: demoItems.length,
-                separatorBuilder: (context, index) =>
-                    const SizedBox(height: 12),
-                itemBuilder: (context, index) {
-                  final item = demoItems[index];
-                  return Card(
-                    elevation: 0,
-                    child: ListTile(
-                      leading: _thumb(context, item),
-                      title: Text(item.title),
-                      subtitle: Text(item.subtitle),
-                      trailing: const Icon(Icons.chevron_right),
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => DetailPage(item: item),
-                          ),
-                        );
-                      },
-                    ),
+              child: ValueListenableBuilder(
+                valueListenable: catalogBox.listenable(),
+                builder: (context, Box<CatalogItem> box, _) {
+                  if (box.isEmpty) {
+                    return const Center(
+                      child: Text('No items yet. Add one!'),
+                    );
+                  }
+                  return ListView.separated(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: box.length,
+                    separatorBuilder: (context, index) =>
+                        const SizedBox(height: 12),
+                    itemBuilder: (context, index) {
+                      final item = box.getAt(index)!;
+                      return Card(
+                        elevation: 0,
+                        child: ListTile(
+                          leading: _thumb(context, item),
+                          title: Text(item.title),
+                          subtitle: Text(item.subtitle),
+                          trailing: const Icon(Icons.chevron_right),
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => DetailPage(item: item),
+                              ),
+                            );
+                          },
+                        ),
+                      );
+                    },
                   );
                 },
               ),
@@ -143,6 +152,17 @@ class HomePage extends StatelessWidget {
             ),
           ],
         ),
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const AddEditItemPage(),
+            ),
+          );
+        },
+        child: const Icon(Icons.add),
       ),
     );
   }
@@ -158,7 +178,55 @@ class DetailPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(item.title)),
+      appBar: AppBar(
+        title: Text(item.title),
+        actions: [
+          IconButton(
+            tooltip: 'Edit',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => AddEditItemPage(item: item),
+                ),
+              );
+            },
+            icon: const Icon(Icons.edit),
+          ),
+          IconButton(
+            tooltip: 'Delete',
+            onPressed: () {
+              showDialog(
+                context: context,
+                builder: (BuildContext context) {
+                  return AlertDialog(
+                    title: const Text('Delete Item'),
+                    content:
+                        const Text('Are you sure you want to delete this item?'),
+                    actions: <Widget>[
+                      TextButton(
+                        child: const Text('Cancel'),
+                        onPressed: () {
+                          Navigator.of(context).pop();
+                        },
+                      ),
+                      TextButton(
+                        child: const Text('Delete'),
+                        onPressed: () {
+                          item.delete();
+                          Navigator.of(context).pop(); // Close the dialog
+                          Navigator.of(context).pop(); // Go back to the list
+                        },
+                      ),
+                    ],
+                  );
+                },
+              );
+            },
+            icon: const Icon(Icons.delete),
+          ),
+        ],
+      ),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(16),
@@ -203,8 +271,6 @@ class DetailPage extends StatelessWidget {
                 style: Theme.of(context).textTheme.bodyLarge,
               ),
               const SizedBox(height: 24),
-
-              // Tombol aman (tidak crash) untuk submission
               FilledButton.icon(
                 onPressed: () {
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -227,7 +293,7 @@ class DetailPage extends StatelessWidget {
 }
 
 // =====================
-// Search (Stateful) - mengikuti panduan syarat StatefulWidget
+// Search (Stateful)
 // =====================
 class SearchPage extends StatefulWidget {
   const SearchPage({super.key});
@@ -272,8 +338,9 @@ class _SearchPageState extends State<SearchPage> {
 
   @override
   Widget build(BuildContext context) {
+    final catalogBox = Hive.box<CatalogItem>('catalog');
     final q = _query.trim().toLowerCase();
-    final filtered = demoItems.where((e) {
+    final filtered = catalogBox.values.where((e) {
       if (q.isEmpty) return true;
       return e.title.toLowerCase().contains(q) ||
           e.subtitle.toLowerCase().contains(q);
